@@ -1,27 +1,31 @@
 const std = @import("std");
-const zigConcurrency = @import("zigConcurrency");
+const print = std.debug.print;
+const InterfaceCheck = @import("./CheckForInterfaceAtCmpTime.zig");
 
 pub fn main() !void {
-    // Prints to stderr, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-    try zigConcurrency.bufferedPrint();
+    // printTheTypes(Person);
+    const a = animal{ .name = .cat };
+    var p = Person{ .name = "bdb" };
+    p.random(a);
 }
 
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
+const animal = struct {
+    name: enum { cat, dog, lion, tiger, other } = .cat,
+    pub fn speak(self: animal) void {
+        std.debug.print("\n the animal is a {any} has spoken the work meow \n", .{self.name});
+        return;
+    }
+};
 
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
+const Person = struct {
+    name: []const u8,
+    number: i32 = 0,
+    const vTable = struct {
+        speak: fn (self: anytype) void,
     };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
-}
+    pub fn random(_: Person, comptime zz: anytype) void {
+        comptime InterfaceCheck.checkIfTypeImplementExpectedInterfaces(vTable, zz);
+        const a: void = zz.speak();
+        return a;
+    }
+};

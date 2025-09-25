@@ -11,7 +11,8 @@ pub fn main() !void {
 
 const animal = struct {
     name: enum { cat, dog, lion, tiger, other } = .cat,
-    pub fn speak(self: animal) void {
+    pub fn speak(self: animal, self1: anytype) void {
+        _ = self1;
         std.debug.print("\n the animal is a {any} has spoken the work meow \n", .{self.name});
         return;
     }
@@ -21,7 +22,7 @@ const Person = struct {
     name: []const u8,
     number: i32 = 0,
     const vTable = struct {
-        speak: fn (self: anytype) void,
+        speak: fn (self: anytype, any: anytype) void,
     };
     pub fn random(_: Person, comptime zz: anytype) void {
         comptime InterfaceCheck.checkIfTypeImplementExpectedInterfaces(vTable, zz);

@@ -13,7 +13,7 @@ const err11 = error{ Random1, Random2 };
 
 const animal = struct {
     name: enum { cat, dog, lion, tiger, other } = .cat,
-    pub fn speak(self: animal) !void {
+    pub fn speak(self: animal) err11!void {
         std.debug.print("\n the animal is a {any} has spoken the work meow \n", .{self.name});
         return;
     }

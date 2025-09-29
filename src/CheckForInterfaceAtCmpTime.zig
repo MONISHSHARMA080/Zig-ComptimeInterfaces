@@ -137,7 +137,11 @@ pub fn InterfaceCheck(configByUser: Config) type {
                     }
                 },
                 else => {
-                    isTypeCompatible();
+                    if (isTypeCompatible(VTableReturnType.?, ImplReturnType.?)) {
+                        if (shouldWeCrashOnError) true else return;
+                    } else {
+                        if (shouldWeCrashOnError) @compileError(cmpPrint(" the return type of VTable({s}) is not compatible with Implemented one({s}) \n", .{ @typeName(ImplReturnType.?), @typeName(VTableReturnType.?) })) else return error.TypeDoesNotMatch;
+                    }
                 },
             }
             return;

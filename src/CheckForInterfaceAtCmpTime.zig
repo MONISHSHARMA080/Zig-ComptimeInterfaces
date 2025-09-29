@@ -21,7 +21,8 @@ pub fn InterfaceCheck(configByUser: Config) type {
         pub fn checkIfTypeImplementsExpectedInterfaces(comptime VTable: type, comptime ImplTypeToCheck: anytype) void {
             const TypeToCheck = @TypeOf(ImplTypeToCheck);
             const nameOfTheStruct = @typeName(TypeToCheck);
-            switch (@typeInfo(VTable)) {
+            const VTableTypeInfo = @typeInfo(VTable);
+            switch (VTableTypeInfo) {
                 .@"struct" => |structInVTableInfo| {
                     inline for (structInVTableInfo.fields) |VTableField| {
                         const fieldName = VTableField.name;
@@ -77,19 +78,10 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         //  make sure that if there is a return type (err) then by defalut it is known , crash on that
                         //  else switch on the vtable type, such as it should tell us that if the error union is anyerror then the error in the impl can be null(type)/ etc,
                         //  if it is something specific, then the implementation type should have the same
-
-                        //
-                        // now checking if the return type is same as we expected them to be
-                        // const ReturnTypeOfInterface = typeOfFunInVTable.@"fn".return_type orelse @panic("the fn " ++ fieldName ++ " on VTable " ++ nameOfTheStruct ++ " does not have any return value");
-                        // const ReturnTypeOfStructToCheck = typeOfFunInStruct.@"fn".return_type orelse @panic("the fn " ++ fieldName ++ " on struct " ++ nameOfTheStruct ++ " does not have any return value");
-                        // if (ReturnTypeOfInterface != ReturnTypeOfStructToCheck) @compileError("return type mismatch between the fn '" ++ fieldName ++ "'  in the VTable and in the struct we are checking \n");
-                        // now we check all the arguments and if the params at all the argument except
-
                         // ==================Stradegy:1 implementation============================
                         // also look for the reading: https://github.com/nilslice/zig-interface/blob/main/src/interface.zig (implemetns the comptime interface)
                         // ==================Stradegy:0============================
                     }
-                    // }
                 },
                 else => {
                     @compileError("\n expected the vtable to be of the type struct but we got something else, for type other than struct the functionalaity is not implemented \n");
@@ -144,9 +136,8 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         if (shouldWeCrashOnError) @compileError(cmpPrint(" the {s} type is null while the {s} is not, we expected the error set to be same  \n", .{ nullParam, notNullParam })) else paramTypeCheckingError.TypeDoesNotMatch;
                     }
                 },
-
                 else => {
-                    @compileError("not there yet");
+                    isTypeCompatible();
                 },
             }
             return;
@@ -255,6 +246,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
                 },
                 .array => |a1| blk: {
                     const a2 = @typeInfo(T2).array;
+                    if (a2 != std.builtin.Type.Array) return false;
                     if (a1.len != a2.len) break :blk false;
                     break :blk isTypeCompatible(a1.child, a2.child);
                 },

@@ -34,33 +34,6 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         // now checking the function arguments
                         if (typeOfFunInStruct.@"fn".params.len != typeOfFunInVTable.@"fn".params.len) @compileError(std.fmt.comptimePrint("expected the fn in vtable({d}) to be eqaul to no of params as fn in given type({s}) ({d})", .{ typeOfFunInVTable.@"fn".params.len, nameOfTheStruct, typeOfFunInStruct.@"fn".params.len }));
                         //
-                        // ==================Stradegy:1============================
-                        // I think the params can be null when a type on them is not present, so we need to check if the type on them is same as the one
-                        // in the vtable, or you know what we know the type of the struct passed in, we know the type of it, and we could find out the self param in it based
-                        // on which param is taking in self_type (assert 1) and that is the self one, if there are more than one  then I want the user to tell me via
-                        // config that the
-                        // or
-                        // there are 3 scenarios, like 1) vtable.Param < struct.Param by 1 or 2) == or  3) vtable.Param > struct.Param by 1; rest will not happen(see above assert)
-                        //  1) here I need to see if the user has not included the self in the VTable one may be as we don't know if it will have them or not-- check
-                        //  if the other params are same and 1 is the margin of error, or may be introduce a config type and we can implement more type saftey by checking
-                        //  the param to be it(check for the self in the struct's fn to be of same type)
-                        //  2) == > if same no of param then leaving the one that doesn't match we check the rest, if in the config struct we don't have type then we assume that it is it
-                        //  else in the param dict we assign it to be it and perform a same check
-                        //  3) vtable.Param > struct.Param: here in the vtable we have the self but not in the struct, so what we can do same in the 1); now note that the
-                        //   1) and 3) are the same so we have same code for them
-                        //
-                        //
-                        // or as we can demand the user to include the reference to self regardless(in vtable and struct) if not then we have a error
-                        //
-                        //NOTE-  we need to handle the case where the interface does not know type of the error the function retunrs(anyerror)
-                        //
-                        // --additon--
-                        // we can return the name(or in the end place it in the struct field) of the type that we assumed to be of self so that the user outside can assert it during the comptime
-                        // in the case where the vtable.Param < struct.Param we have a assertion of the type that is the self but in the 3) case the self on the vtable is
-                        // of the anytype so we don't know the type to asser too, we can just assume it, then if we have the type of the self given by the user we can assume the
-                        // anytype to be of that type, and put that in the struct field for the user to assert (or maybe this should error/crash)
-                        // ==================Stradegy:1 implementation============================
-                        //
                         // since we demanded the user to include the same number of argument (include self in vtable and struct), now we get the ref to self
                         // and the index of the self in the vtable is the same as the one in the Struct.Fn
                         const indexOfSelfInStruct = returnSelfTypeIndexInFnParam(typeOfFunInStruct.@"fn".params, TypeToCheck) catch |err| switch (err) {
@@ -71,13 +44,10 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         // const indexOfSelfInVTable = indexOfSelfInStruct; // cause we can't find it as it might have one or more anytype
                         areParamsTypeSameExceptSelf(typeOfFunInStruct.@"fn".params, typeOfFunInVTable.@"fn".params, indexOfSelfInStruct, void);
                         // now check the same for the return type (make sure of the error etc.)
-                        // @compileError(std.fmt.comptimePrint("return type of the fn in struct is {s} and in the vtable {s} \n", .{ @typeName(typeOfFunInStruct.@"fn".return_type.?), @typeName(typeOfFunInVTable.@"fn".return_type.?) }));
-                        _ = doesReturnTypeMatch(bool, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type);
-
-                        // -- TO DO: --
-                        //  make sure that if there is a return type (err) then by defalut it is known , crash on that
-                        //  else switch on the vtable type, such as it should tell us that if the error union is anyerror then the error in the impl can be null(type)/ etc,
-                        //  if it is something specific, then the implementation type should have the same
+                        const returnTypesMatch = doesReturnTypeMatch(bool, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type);
+                        if (!returnTypesMatch) {
+                            @compileError("the return types does not match \n");
+                        }
                         // ==================Stradegy:1 implementation============================
                         // also look for the reading: https://github.com/nilslice/zig-interface/blob/main/src/interface.zig (implemetns the comptime interface)
                         // ==================Stradegy:0============================

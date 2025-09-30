@@ -7,16 +7,18 @@ pub const Config = struct {
     /// do we want the other params to be of anytype/generics/anyopaque etc. if no then if we encounter param other then self to be of anytype then we will crash
     /// recommend TRUE as we want it to ensure proper types
     allowOtherParamsOfBeingGenerics: bool = false,
-    ReturnType: type,
+    /// when checking the interface if encounters a error this will crash and not return the error
+    crashOnError: bool = true,
 };
+pub const ParamTypeCheckingError = error{ OneParamIsNullWhileOtherIsNot, TypeDoesNotMatch, MoreThanOneReferenceToSelfType, didNotFoundIndex };
+
 pub fn InterfaceCheck(configByUser: Config) type {
     return struct {
         pub const config: Config = configByUser;
         const self = @This();
-        pub const paramTypeCheckingError = error{ OneParamIsNullWhileOtherIsNot, TypeDoesNotMatch, MoreThanOneReferenceToSelfType, didNotFoundIndex };
         /// fn crashes the program if the interface is not present
         /// note: VTable should only contain methods and not var else this will error
-        pub fn checkIfTypeImplementsExpectedInterfaces(comptime VTable: type, comptime ImplTypeToCheck: anytype) void {
+        pub fn checkIfTypeImplementsExpectedInterfaces(comptime VTable: type, comptime ImplTypeToCheck: anytype) ParamTypeCheckingError!void {
             const TypeToCheck = @TypeOf(ImplTypeToCheck);
             const nameOfTheStruct = @typeName(TypeToCheck);
             const VTableTypeInfo = @typeInfo(VTable);
@@ -34,21 +36,32 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         //
                         // since we demanded the user to include the same number of argument (include self in vtable and struct), now we get the ref to self
                         // and the index of the self in the vtable is the same as the one in the Struct.Fn
-                        const indexOfSelfInStruct = returnSelfTypeIndexInFnParam(typeOfFunInStruct.@"fn".params, TypeToCheck) catch |err| switch (err) {
-                            error.MoreThanOneReferenceToSelfType => @compileError("Fn " ++ fieldName ++ "() (type to check) references more than one self value\n"),
-                            error.didNotFoundIndex => @compileError("We were not able to find the self index in your struct's function " ++ fieldName ++ " \n"),
-                            else => unreachable,
-                        };
-                        // const indexOfSelfInVTable = indexOfSelfInStruct; // cause we can't find it as it might have one or more anytype
-                        areParamsTypeSameExceptSelf(typeOfFunInStruct.@"fn".params, typeOfFunInVTable.@"fn".params, indexOfSelfInStruct, void);
+                        const indexOfSelfInStruct = returnSelfTypeIndexInFnParam(typeOfFunInStruct.@"fn".params, TypeToCheck) catch |err|
+                            if (!config.crashOnError) return err else {
+                                switch (err) {
+                                    error.MoreThanOneReferenceToSelfType => @compileError("Fn " ++ fieldName ++ "() (type to check) references more than one self value\n"),
+                                    error.didNotFoundIndex => @compileError("We were not able to find the self index in your struct's function " ++ fieldName ++ " \n"),
+                                    else => unreachable,
+                                }
+                            };
+                        if (config.crashOnError) {
+                            areParamsTypeSameExceptSelf(typeOfFunInStruct.@"fn".params, typeOfFunInVTable.@"fn".params, indexOfSelfInStruct, void);
+                        } else {
+                            try areParamsTypeSameExceptSelf(typeOfFunInStruct.@"fn".params, typeOfFunInVTable.@"fn".params, indexOfSelfInStruct, ParamTypeCheckingError!void);
+                        }
                         // now check the same for the return type (make sure of the error etc.)
-                        const returnTypesMatch = doesReturnTypeMatch(bool, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type);
-                        if (!returnTypesMatch) {
-                            @compileError("the return types does not match \n");
+                        if (config.crashOnError) {
+                            const returnTypesMatch = doesReturnTypeMatch(bool, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type);
+                            if (!returnTypesMatch) {
+                                @compileError("the return types does not match \n");
+                            }
+                        } else {
+                            try doesReturnTypeMatch(ParamTypeCheckingError!void, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type);
                         }
                         // ==================Stradegy:1 implementation============================
                         // also look for the reading: https://github.com/nilslice/zig-interface/blob/main/src/interface.zig (implemetns the comptime interface)
                         // ==================Stradegy:0============================
+                        return;
                     }
                 },
                 else => {
@@ -58,11 +71,11 @@ pub fn InterfaceCheck(configByUser: Config) type {
             // get the methods from the vtable(name) and check if the same type(param and output) is present
         }
 
-        fn doesReturnTypeMatch(ReturnType: type, ImplReturnType: ?type, VTableReturnType: ?type) ReturnType {
+        fn doesReturnTypeMatch(T: type, ImplReturnType: ?type, VTableReturnType: ?type) T {
             //  else switch on the vtable type, such as it should tell us that if the error union is anyerror then the error in the impl can be null(type)/ etc,
             //  if it is something specific, then the implementation type should have the same
-            asserWithErrorMsg(ReturnType == bool or ReturnType == paramTypeCheckingError!void, "the return type of the fn should be either bool or paramTypeCheckingError!void");
-            const shouldWeCrashOnError = if (ReturnType == bool) true else false;
+            asserWithErrorMsg(T == bool or T == ParamTypeCheckingError!void, "the return type of the fn should be either bool or paramTypeCheckingError!void");
+            const shouldWeCrashOnError = if (T == bool) true else false;
             if ((VTableReturnType == null and ImplReturnType != null) or (VTableReturnType != null and ImplReturnType == null)) {
                 // we have a type mismatch, one expects null while other has a type
                 if (!shouldWeCrashOnError) return error.TypeDoesNotMatch else @compileError(cmpPrint(" the {s} is null while the {s} is not, we expected them to have the same type \n", .{ if (VTableReturnType == null) "VTable Fn " else "implementation Fn ", if (VTableReturnType == null) "VTable Fn " else "implementation Fn " }));
@@ -76,12 +89,12 @@ pub fn InterfaceCheck(configByUser: Config) type {
                     switch (implFnReturnTypeInfo) {
                         .error_union => |impleErrUnion| {
                             if (expectedErrorUnion.error_set != impleErrUnion.error_set) {
-                                if (shouldWeCrashOnError) @compileError("the type of error union's errorSet is not equal to the Fn implementation's errorSet") else return paramTypeCheckingError.TypeDoesNotMatch;
+                                if (shouldWeCrashOnError) @compileError("the type of error union's errorSet is not equal to the Fn implementation's errorSet") else return ParamTypeCheckingError.TypeDoesNotMatch;
                             } else if (expectedErrorUnion.payload != impleErrUnion.payload) {
-                                if (shouldWeCrashOnError) @compileError("the type of error union's payload is not equal to the Fn implementation's payload \n") else return paramTypeCheckingError.TypeDoesNotMatch;
+                                if (shouldWeCrashOnError) @compileError("the type of error union's payload is not equal to the Fn implementation's payload \n") else return ParamTypeCheckingError.TypeDoesNotMatch;
                             }
                         },
-                        else => if (shouldWeCrashOnError) @compileError("expected Fn implementation to be of same type as VTable one that is a error union ") else return paramTypeCheckingError.TypeDoesNotMatch,
+                        else => if (shouldWeCrashOnError) @compileError("expected Fn implementation to be of same type as VTable one that is a error union ") else return ParamTypeCheckingError.TypeDoesNotMatch,
                     }
                     if (shouldWeCrashOnError) return true else return void;
                 },
@@ -93,7 +106,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         if (comapreListOfErrors(VtableErrSet.?, implErrSet.?)) {
                             if (shouldWeCrashOnError) return true else return;
                         } else {
-                            if (shouldWeCrashOnError) @compileError("the VtableErrSet is not equal to the ImplErrSet") else return paramTypeCheckingError.TypeDoesNotMatch;
+                            if (shouldWeCrashOnError) @compileError("the VtableErrSet is not equal to the ImplErrSet") else return ParamTypeCheckingError.TypeDoesNotMatch;
                         }
                     } else if (!areBothNotNull(std.builtin.Type.ErrorSet, VtableErrSet, implErrSet)) {
                         if (shouldWeCrashOnError) return else return true;
@@ -101,7 +114,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         // one is null and the other is not
                         const nullParam = if (VtableErrSet == null) "VtableErrSet" else "ImplErrSet";
                         const notNullParam = if (VtableErrSet == null) "ImplErrSet" else "VtableErrSet";
-                        if (shouldWeCrashOnError) @compileError(cmpPrint(" the {s} type is null while the {s} is not, we expected the error set to be same  \n", .{ nullParam, notNullParam })) else paramTypeCheckingError.TypeDoesNotMatch;
+                        if (shouldWeCrashOnError) @compileError(cmpPrint(" the {s} type is null while the {s} is not, we expected the error set to be same  \n", .{ nullParam, notNullParam })) else ParamTypeCheckingError.TypeDoesNotMatch;
                     }
                 },
                 else => {
@@ -138,7 +151,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
         fn areParamsTypeSameExceptSelf(typeToCheckFnParams: []const std.builtin.Type.Fn.Param, vTableFnParams: []const std.builtin.Type.Fn.Param, selfParamIndex: u32, comptime returnType: type) returnType {
             if (typeToCheckFnParams.len != vTableFnParams.len) @compileError("expected the len of the parms of function in vtable and type to check to match \n");
             assert(selfParamIndex <= typeToCheckFnParams.len); // the index should be in the parma len
-            assert(returnType == void or returnType == paramTypeCheckingError!void); // the index should be in the parma len
+            assert(returnType == void or returnType == ParamTypeCheckingError!void); // the index should be in the parma len
             const shouldWeCrashOnError = if (returnType == bool) true else false;
             inline for (typeToCheckFnParams, vTableFnParams, 0..) |typeFnParam, vTableParam, i| {
                 if (i == selfParamIndex) continue;
@@ -161,7 +174,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
         }
 
         /// retuns the index of the self type for the fucntion, if we encounters more than one type then retunrs the error, if we did not found the index then we also return
-        fn returnSelfTypeIndexInFnParam(functionParams: []const std.builtin.Type.Fn.Param, selfType: type) paramTypeCheckingError!u32 {
+        fn returnSelfTypeIndexInFnParam(functionParams: []const std.builtin.Type.Fn.Param, selfType: type) ParamTypeCheckingError!u32 {
             var indexOfSelfType: ?u32 = null;
             inline for (functionParams, 0..) |param, i| {
                 const paramType = param.type orelse continue;

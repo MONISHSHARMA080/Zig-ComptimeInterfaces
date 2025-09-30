@@ -26,7 +26,7 @@ const Person = struct {
         speak: fn (self: anytype) err11!void,
     };
     pub fn random(_: Person, comptime zz: anytype) !void {
-        comptime InterfaceImpl.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(vTable, zz);
+        comptime InterfaceImpl.InterfaceCheck(.{ .crashOnError = true }).checkIfTypeImplementsExpectedInterfaces(vTable, zz) catch unreachable;
         const a: void = try zz.speak();
         return a;
     }

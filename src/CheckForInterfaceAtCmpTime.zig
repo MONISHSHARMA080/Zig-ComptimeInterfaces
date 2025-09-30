@@ -7,15 +7,13 @@ pub const Config = struct {
     /// do we want the other params to be of anytype/generics/anyopaque etc. if no then if we encounter param other then self to be of anytype then we will crash
     /// recommend TRUE as we want it to ensure proper types
     allowOtherParamsOfBeingGenerics: bool = false,
+    ReturnType: type,
 };
 pub fn InterfaceCheck(configByUser: Config) type {
     return struct {
         pub const config: Config = configByUser;
         const self = @This();
-        pub const paramTypeCheckingError = error{
-            OneParamIsNullWhileOtherIsNot,
-            TypeDoesNotMatch,
-        };
+        pub const paramTypeCheckingError = error{ OneParamIsNullWhileOtherIsNot, TypeDoesNotMatch, MoreThanOneReferenceToSelfType, didNotFoundIndex };
         /// fn crashes the program if the interface is not present
         /// note: VTable should only contain methods and not var else this will error
         pub fn checkIfTypeImplementsExpectedInterfaces(comptime VTable: type, comptime ImplTypeToCheck: anytype) void {
@@ -163,7 +161,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
         }
 
         /// retuns the index of the self type for the fucntion, if we encounters more than one type then retunrs the error, if we did not found the index then we also return
-        fn returnSelfTypeIndexInFnParam(functionParams: []const std.builtin.Type.Fn.Param, selfType: type) error{ MoreThanOneReferenceToSelfType, didNotFoundIndex }!u32 {
+        fn returnSelfTypeIndexInFnParam(functionParams: []const std.builtin.Type.Fn.Param, selfType: type) paramTypeCheckingError!u32 {
             var indexOfSelfType: ?u32 = null;
             inline for (functionParams, 0..) |param, i| {
                 const paramType = param.type orelse continue;

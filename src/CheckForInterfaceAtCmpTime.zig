@@ -26,8 +26,15 @@ pub fn InterfaceCheck(configByUser: Config) type {
                 .@"struct" => |structInVTableInfo| {
                     inline for (structInVTableInfo.fields) |VTableField| {
                         const fieldName = VTableField.name;
+
                         const typeOfFunInVTable = @typeInfo(VTableField.type);
-                        if (!@hasDecl(TypeToCheck, fieldName)) @panic("the " ++ nameOfTheStruct ++ " does not contain the field " ++ fieldName ++ "\n");
+                        if (!@hasDecl(TypeToCheck, fieldName)) {
+                            if (config.crashOnError) {
+                                @compileError("the " ++ nameOfTheStruct ++ " does not contain the field " ++ fieldName ++ "()\n");
+                            } else return ParamTypeCheckingError.TypeDoesNotMatch;
+                        }
+                        // if (!@hasField(TypeToCheck, fieldName)) @compileError("the " ++ nameOfTheStruct ++ " does not contain the field " ++ fieldName ++ "\n");
+                        // @hasField(comptime Container: type, comptime name: []const u8)
                         const typeOfFunInStruct = @typeInfo(@TypeOf(@field(TypeToCheck, fieldName)));
                         if (typeOfFunInStruct != .@"fn") @compileError("expected the type's field in the struct " ++ nameOfTheStruct ++ " to be of type Fn \n");
                         if (typeOfFunInVTable != .@"fn") @compileError("expected the VTable's field in the struct " ++ nameOfTheStruct ++ " to be of type Fn, but we got" + @typeName(typeOfFunInVTable) + " \n");
@@ -40,7 +47,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
                             if (!config.crashOnError) return err else {
                                 switch (err) {
                                     error.MoreThanOneReferenceToSelfType => @compileError("Fn " ++ fieldName ++ "() (type to check) references more than one self value\n"),
-                                    error.didNotFoundIndex => @compileError("We were not able to find the self index in your struct's function " ++ fieldName ++ " \n"),
+                                    error.didNotFoundIndex => @compileError("We were not able to find the self index in your struct's function '" ++ fieldName ++ "' in the type " ++ @typeName(TypeToCheck) ++ "  \n"),
                                     else => unreachable,
                                 }
                             };
@@ -51,12 +58,12 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         }
                         // now check the same for the return type (make sure of the error etc.)
                         if (config.crashOnError) {
-                            const returnTypesMatch = doesReturnTypeMatch(bool, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type);
+                            const returnTypesMatch = doesReturnTypeMatch(bool, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type, .{ .fnName = fieldName });
                             if (!returnTypesMatch) {
                                 @compileError("the return types does not match \n");
                             }
                         } else {
-                            try doesReturnTypeMatch(ParamTypeCheckingError!void, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type);
+                            try doesReturnTypeMatch(ParamTypeCheckingError!void, typeOfFunInVTable.@"fn".return_type, typeOfFunInStruct.@"fn".return_type, .{ .fnName = fieldName });
                         }
                         // ==================Stradegy:1 implementation============================
                         // also look for the reading: https://github.com/nilslice/zig-interface/blob/main/src/interface.zig (implemetns the comptime interface)
@@ -71,7 +78,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
             // get the methods from the vtable(name) and check if the same type(param and output) is present
         }
 
-        fn doesReturnTypeMatch(T: type, ImplReturnType: ?type, VTableReturnType: ?type) T {
+        fn doesReturnTypeMatch(T: type, ImplReturnType: ?type, VTableReturnType: ?type, context: struct { fnName: [:0]const u8 = "" }) T {
             //  else switch on the vtable type, such as it should tell us that if the error union is anyerror then the error in the impl can be null(type)/ etc,
             //  if it is something specific, then the implementation type should have the same
             asserWithErrorMsg(T == bool or T == ParamTypeCheckingError!void, "the return type of the fn should be either bool or paramTypeCheckingError!void");
@@ -89,14 +96,14 @@ pub fn InterfaceCheck(configByUser: Config) type {
                     switch (implFnReturnTypeInfo) {
                         .error_union => |impleErrUnion| {
                             if (expectedErrorUnion.error_set != impleErrUnion.error_set) {
-                                if (shouldWeCrashOnError) @compileError("the type of error union's errorSet is not equal to the Fn implementation's errorSet") else return ParamTypeCheckingError.TypeDoesNotMatch;
+                                if (shouldWeCrashOnError) @compileError(cmpPrint("the type of Vtable's error_union's errorSet({s}) is not equal to the Fn {s} in implementation's errorSet({s}) \n", .{ @typeName(expectedErrorUnion.error_set), context.fnName, @typeName(impleErrUnion.error_set) })) else return ParamTypeCheckingError.TypeDoesNotMatch;
                             } else if (expectedErrorUnion.payload != impleErrUnion.payload) {
-                                if (shouldWeCrashOnError) @compileError("the type of error union's payload is not equal to the Fn implementation's payload \n") else return ParamTypeCheckingError.TypeDoesNotMatch;
+                                if (shouldWeCrashOnError) @compileError(cmpPrint("the type of error union's payload({s}) is not equal to the Fn {s} in implementation's payload({s}) \n", .{ @typeName(expectedErrorUnion.payload), context.fnName, @typeName(impleErrUnion.payload) })) else return ParamTypeCheckingError.TypeDoesNotMatch;
                             }
                         },
                         else => if (shouldWeCrashOnError) @compileError("expected Fn implementation to be of same type as VTable one that is a error union ") else return ParamTypeCheckingError.TypeDoesNotMatch,
                     }
-                    if (shouldWeCrashOnError) return true else return void;
+                    if (shouldWeCrashOnError) return true else return;
                 },
                 .error_set => |VtableErrSet| {
                     // case where the fn only returns the error , eg: fn a() err{No} {...}
@@ -119,7 +126,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
                 },
                 else => {
                     if (isTypeCompatible(VTableReturnType.?, ImplReturnType.?)) {
-                        if (shouldWeCrashOnError) true else return;
+                        if (shouldWeCrashOnError) return true else return;
                     } else {
                         if (shouldWeCrashOnError) @compileError(cmpPrint(" the return type of VTable({s}) is not compatible with Implemented one({s}) \n", .{ @typeName(ImplReturnType.?), @typeName(VTableReturnType.?) })) else return error.TypeDoesNotMatch;
                     }
@@ -137,8 +144,8 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         found = true;
                         break;
                     }
-                    if (!found) return false;
                 }
+                if (!found) return false;
             }
             return true;
         }
@@ -298,17 +305,16 @@ test "Check if we get the self type index" {
     {
         comptime {
             const fnInfo = @typeInfo(@TypeOf(MyStruct.byValue)).@"fn";
-            const interfaceCheck = InterfaceCheck();
+            const interfaceCheck = InterfaceCheck(.{});
             const index = try interfaceCheck.returnSelfTypeIndexInFnParam(fnInfo.params, MyStruct);
             try testing.expect(index == 0);
         }
-        std.debug.print("got the ", .{});
     }
 
     // Test byPointer method
     {
         const fnInfo = @typeInfo(@TypeOf(MyStruct.byPointer)).@"fn";
-        const interfaceCheck = InterfaceCheck();
+        const interfaceCheck = InterfaceCheck(.{});
         const index = try interfaceCheck.returnSelfTypeIndexInFnParam(fnInfo.params, MyStruct);
         try testing.expect(index == 0);
     }
@@ -316,7 +322,7 @@ test "Check if we get the self type index" {
     // Test byConstPointer method
     {
         const fnInfo = @typeInfo(@TypeOf(MyStruct.byConstPointer)).@"fn";
-        const interfaceCheck = InterfaceCheck();
+        const interfaceCheck = InterfaceCheck(.{});
         const index = try interfaceCheck.returnSelfTypeIndexInFnParam(fnInfo.params, MyStruct);
         try testing.expect(index == 0);
     }
@@ -324,7 +330,7 @@ test "Check if we get the self type index" {
     // Test withOtherParams method (self is at index 0)
     {
         const fnInfo = @typeInfo(@TypeOf(MyStruct.withOtherParams)).@"fn";
-        const interfaceCheck = InterfaceCheck();
+        const interfaceCheck = InterfaceCheck(.{});
         const index = try interfaceCheck.returnSelfTypeIndexInFnParam(fnInfo.params, MyStruct);
         try testing.expect(index == 0);
     }
@@ -332,7 +338,7 @@ test "Check if we get the self type index" {
     // Test duplicateSelf method (should return error)
     {
         const fnInfo = @typeInfo(@TypeOf(MyStruct.duplicateSelf)).@"fn";
-        const interfaceCheck = InterfaceCheck();
+        const interfaceCheck = InterfaceCheck(.{});
         const result = interfaceCheck.returnSelfTypeIndexInFnParam(fnInfo.params, MyStruct);
         try testing.expectError(error.MoreThanOneReferenceToSelfType, result);
     }

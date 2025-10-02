@@ -31,7 +31,7 @@ test "interface embedding" {
     // Repository interface that embeds Metrics (and transitively Logger)
     const MonitoredRepositoryVTable = struct {
         create: fn (self: anytype, user: User) anyerror!u32,
-        findById: fn (self: anytype, id: u32) anyerror!?User,
+        findById: fn (self: anytype, id: u32) anyerror!?void,
         update: fn (self: anytype, user: User) anyerror!void,
         delete: fn (self: anytype, id: u32) anyerror!void,
         // Embedded from Metrics
@@ -44,23 +44,11 @@ test "interface embedding" {
 
     // Implementation that satisfies all embedded interfaces
     const TrackedRepository = struct {
-        allocator: std.mem.Allocator,
-        users: std.AutoHashMap(u32, User),
-        next_id: u32,
-        log_level: u8,
-        metrics: std.StringHashMap(u64),
+        // allocator: std.mem.Allocator,
+        next_id: u32 = 0,
+        log_level: u8 = 0,
 
         const Self = @This();
-
-        pub fn init(comptime allocator: std.mem.Allocator) !Self {
-            return .{
-                .allocator = allocator,
-                .users = std.AutoHashMap(u32, User).init(allocator),
-                .next_id = 1,
-                .log_level = 0,
-                .metrics = std.StringHashMap(u64).init(allocator),
-            };
-        }
 
         pub fn deinit(self: *Self) void {
             self.metrics.deinit();
@@ -79,54 +67,45 @@ test "interface embedding" {
 
         // Metrics interface methods
         pub fn increment(self: *Self, key: []const u8) void {
-            if (self.metrics.get(key)) |value| {
-                self.metrics.put(key, value + 1) catch {};
-            } else {
-                self.metrics.put(key, 1) catch {};
-            }
+            _ = self;
+            _ = key;
         }
 
         pub fn getValue(self: Self, key: []const u8) u64 {
-            return self.metrics.get(key) orelse 0;
+            _ = self;
+            _ = key;
+            return 0;
         }
 
         // Repository interface methods
         pub fn create(self: *Self, user: User) anyerror!u32 {
-            self.log("Creating new user");
-            self.increment("users.created");
-            var new_user = user;
-            new_user.id = self.next_id;
-            try self.users.put(self.next_id, new_user);
-            self.next_id += 1;
-            return new_user.id;
+            _ = self;
+            _ = user;
+            return 20;
         }
 
-        pub fn findById(self: *Self, id: u32) !?User {
-            self.increment("users.lookup");
-            return self.users.get(id);
+        pub fn findById(self: *Self, id: u32) anyerror!?void {
+            _ = id;
+            _ = self;
+            return;
         }
 
-        pub fn update(self: *Self, user: User) !void {
-            self.log("Updating user");
-            self.increment("users.updated");
-            if (!self.users.contains(user.id)) {
-                return error.UserNotFound;
-            }
-            try self.users.put(user.id, user);
+        pub fn update(self: *Self, user: User) anyerror!void {
+            _ = self;
+            _ = user;
+            return;
         }
 
-        pub fn delete(self: *Self, id: u32) !void {
+        pub fn delete(self: *Self, id: u32) anyerror!void {
             self.log("Deleting user");
             self.increment("users.deleted");
-            if (!self.users.remove(id)) {
-                return error.UserNotFound;
-            }
+            _ = id;
+            return;
         }
     };
 
     comptime {
-        var repo = try TrackedRepository.init(std.testing.allocator);
-        defer repo.deinit();
+        const repo = TrackedRepository{};
 
         // Test that implementation satisfies the base Logger interface
         try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(LoggerVTable, repo);
@@ -135,7 +114,7 @@ test "interface embedding" {
         try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(MetricsVTable1, repo);
 
         // Test that implementation satisfies the full MonitoredRepository interface
-        try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(MonitoredRepositoryVTable, repo);
+        try Interface.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(MonitoredRepositoryVTable, repo);
     }
 
     print("interface embedding test passed\n", .{});

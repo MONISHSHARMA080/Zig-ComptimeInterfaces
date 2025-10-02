@@ -68,7 +68,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
                         // ==================Stradegy:1 implementation============================
                         // also look for the reading: https://github.com/nilslice/zig-interface/blob/main/src/interface.zig (implemetns the comptime interface)
                         // ==================Stradegy:0============================
-                        return;
+                        // return;
                     }
                 },
                 else => {
@@ -76,6 +76,7 @@ pub fn InterfaceCheck(configByUser: Config) type {
                 },
             }
             // get the methods from the vtable(name) and check if the same type(param and output) is present
+            return;
         }
 
         fn doesReturnTypeMatch(T: type, ImplReturnType: ?type, VTableReturnType: ?type, context: struct { fnName: [:0]const u8 = "" }) T {

@@ -2,7 +2,7 @@
 
 Compile-time interface checking for Zig.
 
-## Installation
+## Importing
 
 ```zig
 const Interface = @import("interface");
@@ -36,10 +36,8 @@ const User = struct {
     }
 };
 
-comptime {
-    Interface.InterfaceCheck(.{ .crashOnError = true })
-        .checkIfTypeImplementsExpectedInterfaces(vtable, User);
-}
+comptime Interface.InterfaceCheck(.{ .crashOnError = true }).checkIfTypeImplementsExpectedInterfaces(vtable, User);
+
 ```
 
 ### Complex Types
@@ -75,10 +73,8 @@ const ComplexType = struct {
     }
 };
 
-comptime {
-    Interface.InterfaceCheck(.{ .crashOnError = true })
-        .checkIfTypeImplementsExpectedInterfaces(VTable, ComplexType);
-}
+comptime Interface.InterfaceCheck(.{ .crashOnError = true }).checkIfTypeImplementsExpectedInterfaces(VTable, ComplexType);
+
 ```
 
 ## Options

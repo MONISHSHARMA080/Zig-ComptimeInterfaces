@@ -49,11 +49,11 @@ const WrongComplexType = struct {
 test "testing complex types" {
     print("in complex tests \n", .{});
     comptime {
-        try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(VTable, complexType{});
-        const wrongComplexType = WrongComplexType{};
-        const res: Interface.ParamTypeCheckingError!void = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(VTable, wrongComplexType);
+        try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(VTable, complexType);
+        // const wrongComplexType = WrongComplexType{};
+        const res: Interface.ParamTypeCheckingError!void = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(VTable, WrongComplexType);
         try testing.expectError(Interface.ParamTypeCheckingError.TypeDoesNotMatch, res);
-        try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(VTableWithError, CorrectType{});
+        try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(VTableWithError, CorrectType);
     }
     print(" complexType test worked fine when the error set is diff form the vtable  \n", .{});
 }

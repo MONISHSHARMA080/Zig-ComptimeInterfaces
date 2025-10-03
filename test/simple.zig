@@ -36,10 +36,10 @@ const WrongUser = struct {
 };
 test "A simple test " {
     comptime {
-        const user = User{ .name = "some random", .emaiAddress = "abc@email.com", .age = 22 };
-        const wronguser = WrongUser{ .name = "some random", .emaiAddress = "abc@email.com", .age = 22 };
-        try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(vtable, user);
-        const res = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(vtable, wronguser);
+        // const user = User{ .name = "some random", .emaiAddress = "abc@email.com", .age = 22 };
+        // const wronguser = WrongUser{ .name = "some random", .emaiAddress = "abc@email.com", .age = 22 };
+        try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(vtable, User);
+        const res = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(vtable, WrongUser);
         try testing.expectError(Interface.ParamTypeCheckingError.TypeDoesNotMatch, res);
     }
     print("we are testing a simple test\n", .{});

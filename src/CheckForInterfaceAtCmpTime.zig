@@ -18,8 +18,8 @@ pub fn InterfaceCheck(configByUser: Config) type {
         const self = @This();
         /// fn crashes the program if the interface is not present
         /// note: VTable should only contain methods and not var else this will error
-        pub fn checkIfTypeImplementsExpectedInterfaces(comptime VTable: type, comptime ImplTypeToCheck: anytype) ParamTypeCheckingError!void {
-            const TypeToCheck = @TypeOf(ImplTypeToCheck);
+        pub fn checkIfTypeImplementsExpectedInterfaces(comptime VTable: type, comptime TypeToCheck: type) ParamTypeCheckingError!void {
+            // const TypeToCheck = @TypeOf(ImplTypeToCheck);
             const nameOfTheStruct = @typeName(TypeToCheck);
             const VTableTypeInfo = @typeInfo(VTable);
             switch (VTableTypeInfo) {

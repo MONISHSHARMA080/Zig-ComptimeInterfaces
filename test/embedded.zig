@@ -105,7 +105,7 @@ test "interface embedding" {
     };
 
     comptime {
-        const repo = TrackedRepository{};
+        const repo = TrackedRepository;
 
         // Test that implementation satisfies the base Logger interface
         try Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(LoggerVTable, repo);
@@ -161,13 +161,13 @@ test "nested interface embedding" {
     print("testing nested interface embedding\n", .{});
 
     // Test satisfaction of base Closer interface
-    comptime Interface.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(CloserVTable1, FileWriterStruct{}) catch unreachable;
+    comptime Interface.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(CloserVTable1, FileWriterStruct) catch unreachable;
 
     // Test satisfaction of Writer interface (with embedded Closer)
-    var res = comptime try Interface.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(WriterVTable, FileWriterStruct{});
+    var res = comptime try Interface.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(WriterVTable, FileWriterStruct);
 
     // Test satisfaction of full FileWriter interface
-    res = try comptime Interface.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(FileWriterVTable, FileWriterStruct{});
+    res = try comptime Interface.InterfaceCheck(.{}).checkIfTypeImplementsExpectedInterfaces(FileWriterVTable, FileWriterStruct);
     print("nested interface embedding test passed\n", .{});
 }
 
@@ -200,9 +200,9 @@ test "incomplete implementation fails embedding check" {
 
     // This should fail because embedded methods are missing
     comptime {
-        var res = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(MetricsVTable2, IncompleteImpl{});
+        var res = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(MetricsVTable2, IncompleteImpl);
         try testing.expectError(Interface.ParamTypeCheckingError.TypeDoesNotMatch, res);
-        res = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(vtable11, impl11{});
+        res = Interface.InterfaceCheck(.{ .crashOnError = false }).checkIfTypeImplementsExpectedInterfaces(vtable11, impl11);
         try testing.expectError(Interface.ParamTypeCheckingError.TypeDoesNotMatch, res);
     }
 
